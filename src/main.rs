@@ -41,7 +41,6 @@ impl Aligned64 {
 
 // now create a struct of the same size that is explicitly not aligned to cache lines
 // this should maximize cache misses and loading whole pages into memory
-#[repr(align(64))]
 struct Unaligned {
     data: [u8; UNALIGNED_DATA_SIZE],
 }
