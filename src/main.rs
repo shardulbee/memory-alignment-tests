@@ -88,6 +88,7 @@ fn run_v1(args: &[String]) {
                 });
             }
         }
+        eprintln!("Benchmark for {} complete", alignment_type);
     }
 
     enum AlignmentType {
