@@ -1,3 +1,5 @@
+// #![feature(iter_array_chunks)]
+
 // a big enough number that we should fill up the cache
 const CACHE_SIZE: usize = 1_572_864;
 
@@ -15,6 +17,7 @@ fn run_v1(args: &[String]) {
     // we'll loop through the vector multiple times just to make sure we're getting consistent results
     const NUM_ITERATIONS: usize = 100;
 
+    // 64 * 3 = 192 bytes = 3 cache lines per Aligned
     struct Aligned([u8; ALIGNED_DATA_SIZE]);
     impl Aligned {
         fn new() -> Self {
@@ -28,6 +31,7 @@ fn run_v1(args: &[String]) {
     }
 
     // now create a struct that is explicitly tagged as aligned
+    // 64 * 3 = 192 bytes = 3 cache lines per Aligned64
     #[repr(align(64))]
     struct Aligned64([u8; ALIGNED_DATA_SIZE]);
     impl Aligned64 {
@@ -43,6 +47,7 @@ fn run_v1(args: &[String]) {
 
     // now create a struct of the same size that is explicitly not aligned to cache lines
     // this should maximize cache misses and loading whole pages into memory
+    // 7 bytes, not aligned
     struct Unaligned([u8; UNALIGNED_DATA_SIZE]);
     impl Unaligned {
         fn new() -> Self {
@@ -84,6 +89,9 @@ fn run_v1(args: &[String]) {
                 (0..NUM_ITERATIONS).for_each(|_| {
                     arr.iter_mut().for_each(|x| {
                         x.cpu_intensive_op();
+                        // volatile read to prevent the compiler from optimizing out the loop
+                        // this is a common trick to prevent the compiler from optimizing out the loop
+                        // use read_volatile here
                     });
                 });
             }
@@ -139,7 +147,7 @@ fn run_v2(args: &[String]) {
 
         fn cpu_intensive_op(&mut self) {
             for i in 0..self.0.len() {
-                self.0[i] = self.0[i].wrapping_add(1);
+                let _ = self.0[i].wrapping_add(1);
             }
         }
     }
@@ -157,11 +165,44 @@ fn run_v2(args: &[String]) {
 
     let mut arr = Vec::new();
     for _ in 0..CACHE_SIZE / size_of_struct {
-        arr.push(DynamicVecElement::new(size_of_struct));
+        let dynamic_vec_element = DynamicVecElement::new(size_of_struct);
+        println!(
+            "address={:?}, size={}",
+            dynamic_vec_element.0.as_ptr(),
+            dynamic_vec_element.0.len()
+        );
+        arr.push(dynamic_vec_element);
     }
     for _ in 0..259 {
         arr.iter_mut().for_each(|x| {
             x.cpu_intensive_op();
+        });
+    }
+}
+
+fn run_v3(args: &[String]) {
+    let arr = [0u8; CACHE_SIZE];
+
+    let stride_length = args[2].parse::<usize>();
+    if stride_length.is_err() {
+        eprintln!("Usage: {} v2 <stride length: usize>", args[0]);
+        std::process::exit(1);
+    }
+    let stride_length = stride_length.unwrap();
+    if stride_length == 0 {
+        eprintln!("Stride length must be greater than 0");
+        std::process::exit(1);
+    }
+    for _ in 0..259 {
+        (0..CACHE_SIZE).step_by(stride_length).for_each(|i| {
+            let chunk = if i + stride_length <= CACHE_SIZE {
+                &arr[i..i + stride_length]
+            } else {
+                &arr[i..]
+            };
+            unsafe {
+                chunk.as_ptr().read_volatile();
+            }
         });
     }
 }
@@ -178,6 +219,7 @@ fn main() {
     match version {
         "v1" => run_v1(&args),
         "v2" => run_v2(&args),
+        "v3" => run_v3(&args),
         _ => {
             eprintln!("Invalid version: {}", version);
             std::process::exit(1);
