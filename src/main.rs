@@ -219,7 +219,7 @@ fn run_v4(args: &[String]) {
         eprintln!("Stride length must be greater than 0");
         std::process::exit(1);
     }
-    const COUNT: usize = 24000000;
+    const COUNT: usize = 10000;
     let data = vec![1u8; COUNT * stride_length];
 
     for _ in 0..1000 {
