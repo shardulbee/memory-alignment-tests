@@ -207,6 +207,32 @@ fn run_v3(args: &[String]) {
     }
 }
 
+// run_v4
+fn run_v4(args: &[String]) {
+    let stride_length = args[2].parse::<usize>();
+    if stride_length.is_err() {
+        eprintln!("Usage: {} v2 <stride length: usize>", args[0]);
+        std::process::exit(1);
+    }
+    let stride_length = stride_length.unwrap();
+    if stride_length == 0 {
+        eprintln!("Stride length must be greater than 0");
+        std::process::exit(1);
+    }
+    const COUNT: usize = 10000;
+    let data = vec![1u8; COUNT * stride_length];
+
+    for _ in 0..1000 {
+        for i in 0..COUNT {
+            let datum: &u8 = &data[i * stride_length];
+
+            unsafe {
+                let _ = std::ptr::read_volatile(datum);
+            }
+        }
+    }
+}
+
 // add a runtime flag provided at the command line to specify
 // whether to run the v1 tests or the v2 tests
 fn main() {
@@ -220,6 +246,7 @@ fn main() {
         "v1" => run_v1(&args),
         "v2" => run_v2(&args),
         "v3" => run_v3(&args),
+        "v4" => run_v4(&args),
         _ => {
             eprintln!("Invalid version: {}", version);
             std::process::exit(1);
